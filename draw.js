@@ -1,6 +1,7 @@
+let ctx = canvas.getContext("2d");
+
 function initDrawing() {
   let canvasElement = $('canvas');
-  let ctx = canvas.getContext("2d");
   let isDrawing = false;
   let isDragging;
   let pathBeginningPoint = {};
@@ -26,7 +27,7 @@ function initDrawing() {
     const y2 = event.clientY - rect.top;
     const coordinates = {x1: pathBeginningPoint.x, y1: pathBeginningPoint.y,
       x2: x2 , y2: y2};
-    return view.drawLine(coordinates, false, ctx);
+    return view.drawLine(coordinates, false);
   }
   function stopDraw(event) {
     if (!isDrawing) {return false}
@@ -35,34 +36,38 @@ function initDrawing() {
     const y2 = event.clientY - rect.top;
     const coordinates = {x1: pathBeginningPoint.x, y1: pathBeginningPoint.y,
       x2: x2 , y2: y2};
-    view.drawLine(coordinates, true, ctx);
+    view.drawLine(coordinates, true);
     return isDrawing = false;
   }
 }
 
 let view = {
-  clearCanvas: function(ctx) {
+  clearCanvas: function() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   },
-  drawLinesFromData: function(ctx) {
+  drawLinesFromData: function(data) {
     const lines = octopus.getLines();
     for (const line of lines) {
       ctx.beginPath();
       ctx.moveTo(line.beginCoordinates.x, line.beginCoordinates.y);
-      ctx.lineTo(line.endCoordinates.y, line.endCoordinates.y);
+      ctx.lineTo(line.endCoordinates.x, line.endCoordinates.y);
       ctx.stroke();
+      ctx.closePath();
     }
   },
-  restoreCanvas: function(ctx) {
-    this.clearCanvas(ctx);
-    this.drawLinesFromData(ctx);
+  restoreCanvas: function() {
+    this.clearCanvas();
+    this.drawLinesFromData();
   },
-  drawLine: function(coordinates, isDoneDrawing, ctx) {
-    this.restoreCanvas(ctx);
+  //Command to draw line:
+  //view.drawLine({x1: x1, x2:, x2, y1: y1, y2: y2} , true, ctx);
+  drawLine: function(coordinates, isDoneDrawing) {
+    this.restoreCanvas();
     ctx.beginPath();
     ctx.moveTo(coordinates.x1, coordinates.y1);
     ctx.lineTo(coordinates.x2, coordinates.y2);
     ctx.stroke();
+    ctx.closePath();
     if (isDoneDrawing) {
       const lineObj = {beginCoordinates: {x: coordinates.x1, y: coordinates.y1},
       endCoordinates: {x: coordinates.x2, y: coordinates.y2}};
