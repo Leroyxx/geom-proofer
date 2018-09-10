@@ -1,3 +1,8 @@
+import ui from './ui-helper.js';
+import {
+  checkIntersection,
+  colinearPointWithinSegment
+} from './node_modules/line-intersect/es/index.js';
 const canvasElement = $('canvas');
 const ctx = canvas.getContext("2d");
 
@@ -5,26 +10,32 @@ function initDrawing() {
   view.setDrawListeners();
 }
 
-let view = {
+window.debug = {
+  data: function() {
+    return data
+  }
+}
+
+window.view = {
   isDrawing: false,
   pathBeginningPoint: {},
-  toggleElementOnPage: function(element, bool) {
-    return bool ? element.show() : element.hide()
-  },
   updateUI(tool) {
     const done = $('#done-selecting');
     switch (tool) {
       case 'draw':
-        this.toggleElementOnPage(done, false);
+        ui.toggleElementOnPage(done, false);
         break;
       case 'select':
-        this.toggleElementOnPage(done, true);
+        ui.toggleElementOnPage(done, true);
         break;
       default: break;
     }
   },
   doneSelecting: function() {
     this.selectTool('draw');
+    octopus.writeSelectedData();
+    octopus.writeData(null, 'selection');
+    this.updateCanvas();
   },
   beginDraw: function(event) {
     const rect = canvas.getBoundingClientRect();
@@ -104,6 +115,8 @@ let view = {
       ctx.beginPath();
       ctx.moveTo(line.x1, line.y1);
       ctx.lineTo(line.x2, line.y2);
+      ctx.lineWidth=1;
+      ctx.strokeStyle='black';
       ctx.stroke();
       ctx.closePath();
     }
@@ -115,18 +128,32 @@ let view = {
       this.drawRectangle(selectionCoordinates);
     }
   },
-  restoreCanvas: function() {
+  updateCanvas: function() {
     this.clearCanvas();
+    this.drawSelectedLinesFromData();
     this.drawLinesFromData();
     this.drawSelectionsFromData();
+  },
+  drawSelectedLinesFromData: function() {
+    const selectedLines = octopus.getSelectedLinesFromData();
+    for (const l of selectedLines) {
+      ctx.beginPath();
+      ctx.moveTo(l.x1, l.y1);
+      ctx.lineTo(l.x2, l.y2);
+      ctx.lineWidth=4;
+      ctx.strokeStyle='rgb(255, 248, 18)';
+      ctx.stroke();
+    }
   },
   //Command to draw line:
   //view.drawLine({x1: x1, x2:, x2, y1: y1, y2: y2} , true, ctx);
   drawLine: function(coordinates, isDoneDrawing) {
-    this.restoreCanvas();
+    this.updateCanvas();
     ctx.beginPath();
     ctx.moveTo(coordinates.x1, coordinates.y1);
     ctx.lineTo(coordinates.x2, coordinates.y2);
+    ctx.lineWidth=1;
+    ctx.strokeStyle='black';
     ctx.stroke();
     ctx.closePath();
     if (isDoneDrawing) {
@@ -157,7 +184,7 @@ let view = {
     ctx.stroke();
   },
   drawSelect: function(coordinates, isDoneDrawing) {
-    this.restoreCanvas();
+    this.updateCanvas();
     this.drawRectangle(coordinates);
     if (isDoneDrawing) {
       return octopus.writeData(coordinates, 'selection')
@@ -208,6 +235,37 @@ let octopus = {
   },
   getCurrentSelections: function() {
     return data.getCurrentSelections();
+  },
+  writeSelectedData: function() {
+    const selections = data.selectionData.currentSelections;
+    const lines = data.lineDrawingData.lines;
+    let selectedLines = [];
+    for (let l of lines) {
+      for (let s of selections) {
+        if ( checkIntersection(
+          l.x1, l.y1, l.x2, l.y2, s.x1, s.y1, s.x2, s.y1).type === 'intersecting' ) {
+            selectedLines.push(l)
+            }
+        else if ( checkIntersection(
+          l.x1, l.y1, l.x2, l.y2, s.x2, s.y1, s.x2, s.y2).type === 'intersecting' ) {
+            selectedLines.push(l)
+            }
+        else if ( checkIntersection(
+          l.x1, l.y1, l.x2, l.y2, s.x2, s.y2, s.x1, s.y2).type === 'intersecting' ) {
+            selectedLines.push(l)
+            }
+        else if ( checkIntersection(
+          l.x1, l.y1, l.x2, l.y2, s.x1, s.y2, s.x1, s.y1).type === 'intersecting') {
+            selectedLines.push(l)
+            }
+      }
+    }
+    //Remove duplicates:
+    selectedLines = [...new Set(selectedLines)];
+    return data.selectionData.selectedLines = selectedLines;
+  },
+  getSelectedLinesFromData() {
+    return data.selectionData.selectedLines;
   }
 }
 
@@ -218,7 +276,9 @@ let data = {
     lastBeginningPoint: null
   },
   selectionData: {
-    currentSelections: []
+    currentSelections: [],
+    allSelections: [],
+    selectedLines: []
   },
   writeLastLineBeginningPoint: function(coordinates) {
     data.lineDrawingData.lastBeginningPoint = coordinates
@@ -228,8 +288,16 @@ let data = {
   },
   writeData: function(obj, type) {
     switch (type) {
-      case 'line': data.lineDrawingData.lines.push(obj); break;
-      case 'selection': data.selectionData.currentSelections.push(obj); break;
+      case 'line':
+        obj.id = data.lineDrawingData.lines.length;
+        data.lineDrawingData.lines.push(obj); break;
+      case 'selection':
+        if (obj === null) {data.selectionData.currentSelections = []}
+        else {
+          data.selectionData.allSelections.push(obj);
+          data.selectionData.currentSelections.push(obj);
+        }
+      break;
       default: break;
     }
   },
